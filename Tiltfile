@@ -63,3 +63,35 @@ k8s_yaml('./infra/development/k8s/driver-service-deployment.yaml')
 k8s_resource('driver-service', resource_deps=['driver-service-compile'])
 
 ### End of Driver Service ###
+
+
+### Trip Service ###
+
+trip_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/trip-service ./services/trip-service'
+if os.name == 'nt':
+  trip_compile_cmd = './infra/development/docker/trip-service-build.bat'
+
+local_resource(
+  'trip-service-compile',
+  trip_compile_cmd,
+  deps=['./services/trip-service'])
+
+docker_build_with_restart(
+  'ride-sharing/trip-service',
+  '.',
+  entrypoint=['/app/build/trip-service'],
+  dockerfile='./infra/development/docker/trip-service.Dockerfile',
+  only=[
+    './build/trip-service',
+    './shared',
+  ],
+  live_update=[
+    sync('./build', '/app/build'),
+    sync('./shared', '/app/shared'),
+  ],
+)
+
+k8s_yaml('./infra/development/k8s/trip-service-deployment.yaml')
+k8s_resource('trip-service', resource_deps=['trip-service-compile'])
+
+### End of Trip Service ###

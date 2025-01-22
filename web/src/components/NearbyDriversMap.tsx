@@ -1,19 +1,20 @@
 'use client';
 
 import 'leaflet/dist/leaflet.css';
-import {Driver, useNearbyDrivers} from '@/hooks/useNearbyDrivers';
-import {MapContainer, Marker, Popup, Rectangle, TileLayer} from 'react-leaflet'
+import { Driver, useNearbyDrivers } from '@/hooks/useNearbyDrivers';
+import { MapContainer, Marker, Popup, Rectangle, TileLayer } from 'react-leaflet'
 import L from 'leaflet';
-import {decodeGeoHash} from '@/utils/geohash';
-import {useRef, useState} from 'react';
+import { decodeGeoHash } from '@/utils/geohash';
+import { useRef, useState } from 'react';
 // Fix for default marker icon
 import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
-import {MapClickHandler} from './MapClickHandler';
-import {DriverList} from './DriversList';
-import {Button} from './ui/button';
-import {RequestRideProps} from "@/types";
-import {RoutingControl} from "@/components/RoutingControl";
+import { MapClickHandler } from './MapClickHandler';
+import { DriverList } from './DriversList';
+import { Button } from './ui/button';
+import { RequestRideProps, RouteInfo } from "@/types";
+import { RoutingControl } from "@/components/RoutingControl";
+import { API_URL } from '../constants';
 
 const DefaultIcon = L.icon({
     iconUrl: icon.src,
@@ -27,6 +28,7 @@ L.Marker.prototype.options.icon = DefaultIcon
 
 export function NearbyDriversMap() {
     const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null)
+    const [route, setRoute] = useState<[number, number][]>([])
     const mapRef = useRef<L.Map>(null)
 
     const location = {
@@ -36,11 +38,16 @@ export function NearbyDriversMap() {
 
     const [destination, setDestination] = useState<[number, number] | null>(null)
 
-    const handleMapClick = (e: L.LeafletMouseEvent) => {
+    const handleMapClick = async (e: L.LeafletMouseEvent) => {
         setDestination([e.latlng.lat, e.latlng.lng])
+        
+        await requestRide({
+            pickup: [location.latitude, location.longitude],
+            destination: [e.latlng.lat, e.latlng.lng],
+        })
     }
 
-    const {drivers, error} = useNearbyDrivers(location);
+    const { drivers, error } = useNearbyDrivers(location);
 
     const userMarker = new L.Icon({
         iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Map_pin_icon.svg/176px-Map_pin_icon.svg.png",
@@ -56,21 +63,38 @@ export function NearbyDriversMap() {
 
     // Function to create grid bounds from geohash
     const getGeohashBounds = (geohash: string) => {
-        const {latitude: [minLat, maxLat], longitude: [minLng, maxLng]} = decodeGeoHash(geohash);
+        const { latitude: [minLat, maxLat], longitude: [minLng, maxLng] } = decodeGeoHash(geohash);
         return [
             [minLat, minLng],
             [maxLat, maxLng],
         ];
     };
 
-    const requestRide = async (props: RequestRideProps) => {
-        const {pickup, destination} = props
+    const requestRide = async (props: RequestRideProps): Promise<RouteInfo> => {
+        const { pickup, destination } = props
+        const payload = {
+            pickup: {
+                latitude: pickup[0],
+                longitude: pickup[1],
+            },
+            destination: {
+                latitude: destination[0],
+                longitude: destination[1],
+            },
+        }
 
-        return fetch(
-            `https://router.project-osrm.org/route/v1/driving/${pickup[1]},${pickup[0]};${destination[1]},${destination[0]}?overview=full&geometries=geojson`
-        )
+        const response = await fetch(`${API_URL}/trip`, {
+            method: 'POST',
+            body: JSON.stringify(payload),
+        })
+        const data = await response.json() as RouteInfo
+        const route = data.route
+        const parsedRoute = route.geometry[0].coordinates
+            .map((coord) => [coord.longitude, coord.latitude] as [number, number])
+
+        setRoute(parsedRoute)
+        return data
     }
-
 
     if (error) {
         return <div>Error: {error}</div>;
@@ -80,14 +104,14 @@ export function NearbyDriversMap() {
         <MapContainer
             center={[location.latitude, location.longitude]}
             zoom={13}
-            style={{height: '100vh', width: '100%'}}
+            style={{ height: '100vh', width: '100%' }}
             ref={mapRef}
         >
             <TileLayer
                 url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
                 attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/'>CARTO</a>"
             />
-            <Marker position={[location.latitude, location.longitude]} icon={userMarker}/>
+            <Marker position={[location.latitude, location.longitude]} icon={userMarker} />
 
             {/* Render geohash grid cells */}
             {drivers.map((driver) => (
@@ -113,7 +137,7 @@ export function NearbyDriversMap() {
                 >
                     <Popup>
                         Driver ID: {driver.driver_id}
-                        <br/>
+                        <br />
                         Geohash: {driver.geohash}
                     </Popup>
                 </Marker>
@@ -124,7 +148,7 @@ export function NearbyDriversMap() {
                 </Marker>
             )}
             {destination ? (
-                <DriverList drivers={drivers} onSelectDriver={setSelectedDriver}/>
+                <DriverList drivers={drivers} onSelectDriver={setSelectedDriver} />
             ) : (
                 <div className="flex items-center justify-center h-full">
                     <p className="text-lg font-semibold text-gray-500">Click on the map to set a destination</p>
@@ -138,11 +162,9 @@ export function NearbyDriversMap() {
                 </div>
             )}
             <RoutingControl
-                start={[location.latitude, location.longitude]}
-                destination={destination}
-                onRequestRide={requestRide}
+                route={route}
             />
-            <MapClickHandler onClick={handleMapClick}/>
+            <MapClickHandler onClick={handleMapClick} />
         </MapContainer>
     )
 }
