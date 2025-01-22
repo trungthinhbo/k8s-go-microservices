@@ -1,0 +1,148 @@
+'use client';
+
+import 'leaflet/dist/leaflet.css';
+import {Driver, useNearbyDrivers} from '@/hooks/useNearbyDrivers';
+import {MapContainer, Marker, Popup, Rectangle, TileLayer} from 'react-leaflet'
+import L from 'leaflet';
+import {decodeGeoHash} from '@/utils/geohash';
+import {useRef, useState} from 'react';
+// Fix for default marker icon
+import icon from 'leaflet/dist/images/marker-icon.png'
+import iconShadow from 'leaflet/dist/images/marker-shadow.png'
+import {MapClickHandler} from './MapClickHandler';
+import {DriverList} from './DriversList';
+import {Button} from './ui/button';
+import {RequestRideProps} from "@/types";
+import {RoutingControl} from "@/components/RoutingControl";
+
+const DefaultIcon = L.icon({
+    iconUrl: icon.src,
+    shadowUrl: iconShadow.src,
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+})
+
+L.Marker.prototype.options.icon = DefaultIcon
+
+
+export function NearbyDriversMap() {
+    const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null)
+    const mapRef = useRef<L.Map>(null)
+
+    const location = {
+        latitude: 37.7749,
+        longitude: -122.4194,
+    };
+
+    const [destination, setDestination] = useState<[number, number] | null>(null)
+
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+        setDestination([e.latlng.lat, e.latlng.lng])
+    }
+
+    const {drivers, error} = useNearbyDrivers(location);
+
+    const userMarker = new L.Icon({
+        iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Map_pin_icon.svg/176px-Map_pin_icon.svg.png",
+        iconSize: [40, 40], // Size of the marker
+        iconAnchor: [20, 40], // Anchor point
+    });
+
+    const driverMarker = new L.Icon({
+        iconUrl: "https://www.svgrepo.com/show/25407/car.svg",
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+    });
+
+    // Function to create grid bounds from geohash
+    const getGeohashBounds = (geohash: string) => {
+        const {latitude: [minLat, maxLat], longitude: [minLng, maxLng]} = decodeGeoHash(geohash);
+        return [
+            [minLat, minLng],
+            [maxLat, maxLng],
+        ];
+    };
+
+    const requestRide = async (props: RequestRideProps) => {
+        const {pickup, destination} = props
+
+        return fetch(
+            `https://router.project-osrm.org/route/v1/driving/${pickup[1]},${pickup[0]};${destination[1]},${destination[0]}?overview=full&geometries=geojson`
+        )
+    }
+
+
+    if (error) {
+        return <div>Error: {error}</div>;
+    }
+
+    return (
+        <MapContainer
+            center={[location.latitude, location.longitude]}
+            zoom={13}
+            style={{height: '100vh', width: '100%'}}
+            ref={mapRef}
+        >
+            <TileLayer
+                url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+                attribution="&copy; <a href='https://www.openstreetmap.org/copyright'>OpenStreetMap</a> contributors &copy; <a href='https://carto.com/'>CARTO</a>"
+            />
+            <Marker position={[location.latitude, location.longitude]} icon={userMarker}/>
+
+            {/* Render geohash grid cells */}
+            {drivers.map((driver) => (
+                <Rectangle
+                    key={`grid-${driver.geohash}`}
+                    bounds={getGeohashBounds(driver.geohash) as L.LatLngBoundsExpression}
+                    pathOptions={{
+                        color: '#3388ff',
+                        weight: 1,
+                        fillOpacity: 0.1
+                    }}
+                >
+                    <Popup>Geohash: {driver.geohash}</Popup>
+                </Rectangle>
+            ))}
+
+            {/* Render driver markers */}
+            {drivers.map((driver) => (
+                <Marker
+                    key={driver.driver_id}
+                    position={[driver.location.latitude, driver.location.longitude]}
+                    icon={driverMarker}
+                >
+                    <Popup>
+                        Driver ID: {driver.driver_id}
+                        <br/>
+                        Geohash: {driver.geohash}
+                    </Popup>
+                </Marker>
+            ))}
+            {destination && (
+                <Marker position={destination} icon={userMarker}>
+                    <Popup>Destination</Popup>
+                </Marker>
+            )}
+            {destination ? (
+                <DriverList drivers={drivers} onSelectDriver={setSelectedDriver}/>
+            ) : (
+                <div className="flex items-center justify-center h-full">
+                    <p className="text-lg font-semibold text-gray-500">Click on the map to set a destination</p>
+                </div>
+            )}
+            {selectedDriver && (
+                <div className="mt-4 z-[9999] absolute bottom-0 right-0">
+                    <Button className="w-full">
+                        Request Ride with {selectedDriver.driver_id}
+                    </Button>
+                </div>
+            )}
+            <RoutingControl
+                start={[location.latitude, location.longitude]}
+                destination={destination}
+                onRequestRide={requestRide}
+            />
+            <MapClickHandler onClick={handleMapClick}/>
+        </MapContainer>
+    )
+}

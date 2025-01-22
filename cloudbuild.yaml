@@ -1,0 +1,41 @@
+steps:
+  # Build API Gateway (don't forget to add --platform linux/amd64 when building locally)
+  - id: docker-builder-api-gateway
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA',
+           '-f', 'infra/production/docker/api-gateway.Dockerfile', '.']
+    waitFor: ['-'] 
+
+  # Build Driver Service (don't forget to add --platform linux/amd64 when building locally)
+  - id: docker-builder-driver
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA',
+           '-f', 'infra/production/docker/driver-service.Dockerfile', '.']
+    waitFor: ['-']
+
+  # Push images (in parallel)
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-api-gateway
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA']
+    waitFor: ['docker-builder-api-gateway']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-driver-service
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA']
+    waitFor: ['docker-builder-driver']
+
+  # Update kubernetes manifests (after all pushes complete)
+  - id: gke-deploy
+    name: 'gcr.io/cloud-builders/gke-deploy'
+    args:
+    - run
+    - --filename=infra/production/k8s
+    - --location=europe-west1
+    - --cluster=ride-sharing-cluster
+    waitFor: ['push-api-gateway', 'push-driver-service']
+
+images:
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA'
+
+timeout: 1800s  # 30 minutes

@@ -1,0 +1,46 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: ride-sharing
+build:
+  artifacts:
+    - image: ride-sharing/api-gateway
+      context: .
+      docker:
+        dockerfile: infra/development/docker/api-gateway.Dockerfile
+      sync:
+        infer:
+          - "**/*.go"
+    - image: ride-sharing/driver-service
+      context: .
+      docker:
+        dockerfile: infra/development/docker/driver-service.Dockerfile
+      sync:
+        infer:
+          - "**/*.go"
+  tagPolicy:
+    sha256: {}
+  local:
+    push: false
+    useBuildkit: true
+manifests:
+  rawYaml:
+    - ./infra/development/k8s/api-gateway-deployment.yaml
+    - ./infra/development/k8s/driver-service-deployment.yaml
+portForward:
+  - resourceType: service
+    resourceName: api-gateway
+    port: 8081
+    localPort: 8081
+  - resourceType: service
+    resourceName: driver-service
+    port: 8082
+    localPort: 8082
+profiles:
+  - name: dev
+    build:
+      local:
+        push: false
+        useBuildkit: true
+    deploy:
+      kubectl: {}
