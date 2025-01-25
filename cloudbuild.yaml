@@ -13,6 +13,13 @@ steps:
            '-f', 'infra/production/docker/driver-service.Dockerfile', '.']
     waitFor: ['-']
 
+  # Build Trip Service (don't forget to add --platform linux/amd64 when building locally)
+  - id: docker-builder-trip
+    name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:$COMMIT_SHA',
+           '-f', 'infra/production/docker/trip-service.Dockerfile', '.']
+    waitFor: ['-']
+
   # Push images (in parallel)
   - name: 'gcr.io/cloud-builders/docker'
     id: push-api-gateway
@@ -24,6 +31,11 @@ steps:
     args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA']
     waitFor: ['docker-builder-driver']
 
+  - name: 'gcr.io/cloud-builders/docker'
+    id: push-trip-service
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:$COMMIT_SHA']
+    waitFor: ['docker-builder-trip']
+
   # Update kubernetes manifests (after all pushes complete)
   - id: gke-deploy
     name: 'gcr.io/cloud-builders/gke-deploy'
@@ -32,11 +44,12 @@ steps:
     - --filename=infra/production/k8s
     - --location=europe-west1
     - --cluster=ride-sharing-cluster
-    waitFor: ['push-api-gateway', 'push-driver-service']
+    waitFor: ['push-api-gateway', 'push-driver-service', 'push-trip-service']
 
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA'
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:$COMMIT_SHA'
 
 options:
   logging: CLOUD_LOGGING_ONLY
