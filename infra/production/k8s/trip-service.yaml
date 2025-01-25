@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: trip-service
-          image: europe-west1-docker.pkg.dev/{{PROJECT_ID}}/ride-sharing/trip-service
+          image: europe-west1-docker.pkg.dev/balmy-elevator-416913/ride-sharing/trip-service
           ports:
             - containerPort: 9093
 ---

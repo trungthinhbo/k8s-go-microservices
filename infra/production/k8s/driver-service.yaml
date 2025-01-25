@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: driver-service
-          image: europe-west1-docker.pkg.dev/{{PROJECT_ID}}/ride-sharing/driver-service
+          image: europe-west1-docker.pkg.dev/balmy-elevator-416913/ride-sharing/driver-service
           ports:
             - containerPort: 8082
             - containerPort: 9092
