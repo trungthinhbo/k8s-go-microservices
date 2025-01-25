@@ -1,29 +1,41 @@
+# Build API Gateway (don't forget to add --platform linux/amd64 when building locally)
+
 steps:
-  # Build API Gateway (don't forget to add --platform linux/amd64 when building locally)
+  # Build API Gateway (with both COMMIT_SHA and latest tags, don't forget to add --platform linux/amd64 when building locally)
   - id: docker-builder-api-gateway
     name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA',
+    args: ['build', '--platform', 'linux/amd64', 
+           '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA',
+           '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:latest',
            '-f', 'infra/production/docker/api-gateway.Dockerfile', '.']
     waitFor: ['-'] 
 
-  # Build Driver Service (don't forget to add --platform linux/amd64 when building locally)
+  # Build Driver Service (with both COMMIT_SHA and latest tags, don't forget to add --platform linux/amd64 when building locally)
   - id: docker-builder-driver
     name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA',
+    args: ['build', '--platform', 'linux/amd64', 
+           '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA',
+           '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:latest',
            '-f', 'infra/production/docker/driver-service.Dockerfile', '.']
     waitFor: ['-']
 
-  # Build Trip Service (don't forget to add --platform linux/amd64 when building locally)
+  # Build Trip Service (with both COMMIT_SHA and latest tags, don't forget to add --platform linux/amd64 when building locally)
   - id: docker-builder-trip
     name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:$COMMIT_SHA',
+    args: ['build', '--platform', 'linux/amd64', 
+           '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:$COMMIT_SHA',
+           '-t', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:latest',
            '-f', 'infra/production/docker/trip-service.Dockerfile', '.']
     waitFor: ['-']
 
-  # Push images (in parallel)
+  # Push images (in parallel with both tags)
   - name: 'gcr.io/cloud-builders/docker'
     id: push-api-gateway
     args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA']
+    waitFor: ['docker-builder-api-gateway']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:latest']
     waitFor: ['docker-builder-api-gateway']
 
   - name: 'gcr.io/cloud-builders/docker'
@@ -32,8 +44,16 @@ steps:
     waitFor: ['docker-builder-driver']
 
   - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:latest']
+    waitFor: ['docker-builder-driver']
+
+  - name: 'gcr.io/cloud-builders/docker'
     id: push-trip-service
     args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:$COMMIT_SHA']
+    waitFor: ['docker-builder-trip']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:latest']
     waitFor: ['docker-builder-trip']
 
   # Update kubernetes manifests (after all pushes complete)
@@ -48,8 +68,11 @@ steps:
 
 images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:latest'
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:latest'
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:$COMMIT_SHA'
+  - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/trip-service:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
