@@ -38,4 +38,7 @@ images:
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/api-gateway:$COMMIT_SHA'
   - 'europe-west1-docker.pkg.dev/$PROJECT_ID/ride-sharing/driver-service:$COMMIT_SHA'
 
+options:
+  logging: CLOUD_LOGGING_ONLY
+
 timeout: 1800s  # 30 minutes
