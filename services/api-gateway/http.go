@@ -25,7 +25,7 @@ func handleGetServices(w http.ResponseWriter, r *http.Request) {
 	var services []Service
 	services = append(services, Service{
 		URL:  "http://localhost:8082",
-		Name: "driver-service",
+		Name: "driver-service v2",
 	})
 
 	err := writeJSON(w, http.StatusOK, services)
